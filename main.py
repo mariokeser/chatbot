@@ -60,34 +60,45 @@ async def create_image(request: Request, user_input: Annotated[str, Form()]):
     return templates.TemplateResponse("image.html", {"request": request, "image_url": image_url})
 
 
+system_msg = {"role": "system", "content": "You are a python tutor AI, completely dedicated to teach users how "
+                                          "to learn Python from scratch.Please provide clear instructions"
+                                          "on Python concepts, best practices and syntax. Help create a path of learning"
+                                          "for users to be able to create real life production ready python applications"}
+
+
+system_msg = {"role": "system", "content": "You are a python tutor AI, completely dedicated to teach users how "
+                                          "to learn Python from scratch.Please provide clear instructions"
+                                          "on Python concepts, best practices and syntax. Help create a path of learning"
+                                          "for users to be able to create real life production ready python applications"}
+
+
 @app.websocket("/ws")
 async def chat(websocket: WebSocket):
     await websocket.accept()
+    ws_chat_log = [system_msg]
     try:
-        while True:
-            user_input = await websocket.receive_text()
-            chat_log.append({"role": "user", "content": user_input})
+        async for user_input in websocket.iter_text():
+            ws_chat_log.append({"role": "user", "content": user_input})
             try:
                 response = openai.chat.completions.create(
                     model="gpt-4.1",
-                    messages=chat_log,
+                    messages=ws_chat_log,
                     temperature=0.6,
                     max_tokens=50,
                     stream=True)
                 ai_response = ""
                 for chunk in response:
-                    if chunk.choices[0].delta.content:
+                    if chunk.choices[0].delta.content is not None:
                         ai_response += chunk.choices[0].delta.content
                         await websocket.send_text(chunk.choices[0].delta.content)
-                chat_log.append({"role": "assistant", "content": ai_response})
+                ws_chat_log.append({"role": "assistant", "content": ai_response})
             except Exception as e:
                 await websocket.send_text(f"Error: {str(e)}")
     except WebSocketDisconnect:
         pass
     except Exception:
         try:
-            await websocket.close(code=1001, reason="Server error")
+            await websocket.close(code=1011, reason="Server error")
         except Exception:
             pass
-
 
